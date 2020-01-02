@@ -1,6 +1,6 @@
 # TemperatureSensor
 
-## Apply By:
+## Applied By:
 1. Roie Koper
 2. Oz Hogeg
 
