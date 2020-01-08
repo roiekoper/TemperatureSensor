@@ -38,41 +38,43 @@ void setup() {
   pinMode(TEMPERATURE_SENSOR_PIN,INPUT);
 
   initMatrixMode();
-  initMatrixLed();
 }
 
 // loop function
 void loop() {
-  float temp = readTempFromSensor();
-  int numberTemp = (int)temp;
-  int fraction = ((int)(temp * 100.0) % 100) + 1;
+  float temperature = readTemperatureFromSensor();
+  int numberTemp = (int)temperature;
+  int fraction = ((int)(temperature * 100.0) % 100) + 1;
 
-  printTempToTerminal(numberTemp,fraction);
+  printTempToMonitor(numberTemp,fraction);
 
-  initMatrixLed();
+  resetMatrixLed();
   initFractionLeds(fraction);
 
-  printTempToTerminal(numberTemp,fraction);
-  printNumber( numberTemp % 10, 1);
-  printNumber(numberTemp / 10, 0);
-  printOthersFractionLeds();
-
+  printTemperature(numberTemp);
   delay(200);
 }
 
-// The function read the temp from the sensor and convert the value to celcius
-float readTempFromSensor(){
-  float temp;
+//The function print the temperature number and fraction on the matrix led
+void printTemperature(int numberTemperature) {
+  printNumberAndFraction(numberTemperature % 10, 1); //right digit
+  printNumberAndFraction(numberTemperature / 10, 0); //left digit
+  printOthersFractionLeds();
+}
+
+// The function read the temperature from the sensor and convert the value to celcius
+float readTemperatureFromSensor(){
+  float temperature;
   float R1 = 10000; // value of R1 on board
   float logR2, R2;
   
   Vo = analogRead(TEMPERATURE_SENSOR_PIN);
   R2 = R1 * (1023.0 / (float)Vo - 1.0); //calculate resistance on thermistor
   logR2 = log(R2);
-  temp = (1.0 / (c1 + c2*logR2 + c3*logR2*logR2*logR2)); // temperature in Kelvin
-  temp = temp - 273.15; //convert Kelvin to Celcius
+  temperature = (1.0 / (c1 + c2*logR2 + c3*logR2*logR2*logR2)); // temperatureerature in Kelvin
+  temperature = temperature - 273.15; //convert Kelvin to Celcius
 
-  return temp;
+  return temperature;
 }
 
 // The function write bit to led and call clk 
@@ -81,8 +83,6 @@ void writeBit(bool b) // Write 1 bit to the buffer
   digitalWrite(DIN,b);
   digitalWrite(CLK,LOW);
   digitalWrite(CLK,HIGH);
-//  Serial.print(b);
-//  Serial.print(".");
 }
 
 // The function set buffer to column matrix led
@@ -90,7 +90,6 @@ void latchBuf() // Latch the entire buffer
 {
   digitalWrite(CS,LOW);
   digitalWrite(CS,HIGH);
-//  Serial.println();
 }
 
 // The function init matrix modes (decode mode, scan limit, and shutdown)
@@ -119,24 +118,24 @@ void initMatrixMode(){
 }
 
 // The function turn-off all the leds in the matrix leds
-void initMatrixLed(){
+void resetMatrixLed(){
   for(int i = 0; i < 8; i ++){
-    updateColumnByIDAndNumber(i, "00000", false);
+    printColumnByIDAndNumber(i, "00000", false);
   }
 }
 
 // The function get a number and indication to unity indices and print on the matrix leds
-void printNumber(int number, int isUnity){
+void printNumberAndFraction(int number, int isUnity){
   int startColumn = 0;
   if(isUnity)
       startColumn = startColumn + 5;
       
   for(int i = 0; i < 3; i++)
-    updateColumnByIDAndNumber(i + startColumn, DIGIT_NUMBERS[number][i], true);
+    printColumnByIDAndNumber(i + startColumn, DIGIT_NUMBERS[number][i], true);
 }
 
-// The function print the temp in celsius
-void printTempToTerminal(int number, int fraction){
+// The function print the temperature in celsius
+void printTempToMonitor(int number, int fraction){
   Serial.print("Temperature: "); 
   Serial.print(number);
   Serial.print(".");
@@ -152,7 +151,7 @@ void printTempToTerminal(int number, int fraction){
 void printOthersFractionLeds(){
   for(int i = 0; i < 2; i++)
     if(!fractionsLeds[i].isTurnedOnWithDigit){
-      updateColumnByIDAndNumber(fractionsLeds[i].ledIndex, "00000", true); // if column  not updated by digit all column is dark so we just want to update the first led that inner functions check
+      printColumnByIDAndNumber(fractionsLeds[i].ledIndex, "00000", true); // if column  not updated by digit all column is dark so we just want to update the first led that inner functions check
     }
 }
 
@@ -167,15 +166,15 @@ void initFractionLeds(int fraction){
   fractionsLeds[1].isTurnedOnWithDigit = false;
 }
 
-// The function update column matrix led by columnID and leds pattern. Update first led quarter temp if in number column
-void updateColumnByIDAndNumber(int columnID, String leds, bool needToCheckFirstLed){
+// The function update column matrix led by columnID and leds pattern. Update first led quarter temperature if in number column
+void printColumnByIDAndNumber(int columnID, String leds, bool needToCheckFirstLed){
   setColumnMatrixLed(columnID);
-  turnOnColumn(leds,needToCheckFirstLed && isFirstBitNeedToTurnOn(columnID));
+  setColumnToBuffer(leds,needToCheckFirstLed && isFractionLedNeedToTurnOnWithColumn(columnID));
   latchBuf();
 }
 
 // The function check if need to turn-on the first led of this column
-bool isFirstBitNeedToTurnOn(int columnID){
+bool isFractionLedNeedToTurnOnWithColumn(int columnID){
   for(int i = 0; i < 2; i++){
     if(fractionsLeds[i].ledIndex == columnID){
       fractionsLeds[i].isTurnedOnWithDigit = true;
@@ -195,16 +194,16 @@ void setColumnMatrixLed(int columnID){
   }
 }
 
-// The function write the bit binaries if firstLedNeedToTurnOn is on, turn on first led, else turn-off all three first leds
-void turnOnColumn(String leds, bool firstLedNeedToTurnOn){
+// The function write the bit binaries if isFractionLedNeedToTurnOnWithColumn is on, turn on first led, else print all three first leds
+void setColumnToBuffer(String leds, bool isFractionLedNeedToTurnOnWithColumn){
   int i = 0;
   
-  if(firstLedNeedToTurnOn){
+  if(isFractionLedNeedToTurnOnWithColumn){
     i++;
     writeBit(HIGH);
   }
   
-  for(; i < 3; i++) // start three digits always zero because we write in the upper screen
+  for(; i < 3; i++) // start three or two bit always zero because we write in the upper screen
     writeBit(LOW);
     
   for(int i = 0; i < 5; i++)
